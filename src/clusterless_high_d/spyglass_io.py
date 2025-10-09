@@ -1,23 +1,25 @@
 """Spyglass I/O functions for loading hippocampal datasets."""
 
 from pathlib import Path
-from typing import Dict, Any, Tuple
-import yaml
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import pandas as pd
+import yaml
 
 # --- Spyglass Imports ---
-from spyglass.common import Session, IntervalList
-from spyglass.position import PositionOutput
+from spyglass.common import IntervalList, Session
 from spyglass.decoding.v1.clusterless import (
     PositionGroup,
     UnitWaveformFeatures,
     UnitWaveformFeaturesGroup,
 )
+from spyglass.position import PositionOutput
 
 
-def load_dataset(dataset_id: str, registry_path: Path = Path("configs/datasets.yaml")) -> Dict[str, Any]:
+def load_dataset(
+    dataset_id: str, registry_path: Path = Path("configs/datasets.yaml")
+) -> Dict[str, Any]:
     """Load a dataset from Spyglass.
 
     This function queries Spyglass based on the dataset_id and returns
@@ -146,10 +148,12 @@ def _generate_placeholder_data(metadata: dict) -> Dict[str, Any]:
     t = np.linspace(0, 4 * np.pi, n_time)
     center_x, center_y = 50, 50
     radius = 30
-    position = np.column_stack([
-        center_x + radius * np.cos(t),
-        center_y + radius * np.sin(t),
-    ])
+    position = np.column_stack(
+        [
+            center_x + radius * np.cos(t),
+            center_y + radius * np.sin(t),
+        ]
+    )
 
     # Time stamps
     time = np.linspace(0, 100, n_time)  # 100 seconds
@@ -218,9 +222,7 @@ def fetch_waveform_features(waveform_key: dict) -> Tuple[np.ndarray, np.ndarray]
         )
 
     # Fetch spike times and features using Spyglass's fetch_data method
-    spike_times, waveform_features = (
-        UnitWaveformFeatures & waveform_key
-    ).fetch_data()
+    spike_times, waveform_features = (UnitWaveformFeatures & waveform_key).fetch_data()
 
     return spike_times, waveform_features
 

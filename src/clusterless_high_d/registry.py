@@ -1,11 +1,14 @@
 """Dataset registry management for batch processing."""
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 import yaml
 
 
-def load_dataset_registry(registry_path: Path = Path("configs/datasets.yaml")) -> Dict[str, Any]:
+def load_dataset_registry(
+    registry_path: Path = Path("configs/datasets.yaml"),
+) -> Dict[str, Any]:
     """Load the dataset registry from YAML.
 
     Parameters
@@ -37,9 +40,7 @@ def load_dataset_registry(registry_path: Path = Path("configs/datasets.yaml")) -
         registry = yaml.safe_load(f)
 
     if not isinstance(registry, dict):
-        raise ValueError(
-            f"Registry must be a dictionary, got {type(registry)}"
-        )
+        raise ValueError(f"Registry must be a dictionary, got {type(registry)}")
 
     # Validate each entry
     for dataset_id, info in registry.items():
@@ -56,7 +57,9 @@ def load_dataset_registry(registry_path: Path = Path("configs/datasets.yaml")) -
     return registry
 
 
-def get_dataset_info(dataset_id: str, registry_path: Path = Path("configs/datasets.yaml")) -> Dict[str, Any]:
+def get_dataset_info(
+    dataset_id: str, registry_path: Path = Path("configs/datasets.yaml")
+) -> Dict[str, Any]:
     """Get metadata for a specific dataset.
 
     Parameters

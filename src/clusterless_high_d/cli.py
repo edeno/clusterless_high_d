@@ -1,13 +1,13 @@
 """Command-line interface for clusterless high-dimensional decoding."""
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Optional
 
 from .decode import run_decode
 from .preprocessing import populate_waveform_features
-from .registry import load_dataset_registry, get_dataset_info
+from .registry import get_dataset_info, load_dataset_registry
 
 
 def preprocess_command(args: argparse.Namespace) -> int:
@@ -31,17 +31,11 @@ def preprocess_command(args: argparse.Namespace) -> int:
                 f"waveform_features_group_name not specified in dataset config"
             )
         if not position_group_name:
-            raise ValueError(
-                f"position_group_name not specified in dataset config"
-            )
+            raise ValueError(f"position_group_name not specified in dataset config")
         if not encoding_interval:
-            raise ValueError(
-                f"encoding_interval not specified in preprocessing config"
-            )
+            raise ValueError(f"encoding_interval not specified in preprocessing config")
         if not decoding_interval:
-            raise ValueError(
-                f"decoding_interval not specified in preprocessing config"
-            )
+            raise ValueError(f"decoding_interval not specified in preprocessing config")
 
         print(f"Preprocessing dataset: {args.dataset_id}")
         print(f"  NWB file: {nwb_file_name}")
@@ -67,6 +61,7 @@ def preprocess_command(args: argparse.Namespace) -> int:
         print(f"✗ Error during preprocessing: {e}", file=sys.stderr)
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -110,7 +105,9 @@ def batch_command(args: argparse.Namespace) -> int:
                 failures.append((dataset_id, str(e)))
 
         print(f"\n{'='*60}")
-        print(f"Batch complete: {len(registry) - len(failures)}/{len(registry)} succeeded")
+        print(
+            f"Batch complete: {len(registry) - len(failures)}/{len(registry)} succeeded"
+        )
 
         if failures:
             print(f"\nFailed datasets:")
@@ -133,41 +130,35 @@ def main(argv: Optional[list] = None) -> int:
 
     # Preprocess command
     preprocess_parser = subparsers.add_parser(
-        "preprocess",
-        help="Extract waveform features (marks) from raw ephys data"
+        "preprocess", help="Extract waveform features (marks) from raw ephys data"
     )
     preprocess_parser.add_argument(
         "--dataset-id", required=True, help="Dataset identifier"
     )
     preprocess_parser.add_argument(
-        "--datasets", default="configs/datasets.yaml",
-        help="Path to datasets registry with preprocessing params"
+        "--datasets",
+        default="configs/datasets.yaml",
+        help="Path to datasets registry with preprocessing params",
     )
     preprocess_parser.add_argument(
-        "--overwrite", action="store_true",
-        help="Overwrite existing features (default: skip duplicates)"
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing features (default: skip duplicates)",
     )
     preprocess_parser.add_argument(
-        "--verbose", action="store_true",
-        help="Show detailed error messages"
+        "--verbose", action="store_true", help="Show detailed error messages"
     )
 
     # Decode command
-    decode_parser = subparsers.add_parser(
-        "decode", help="Decode a single dataset"
-    )
-    decode_parser.add_argument(
-        "--dataset-id", required=True, help="Dataset identifier"
-    )
+    decode_parser = subparsers.add_parser("decode", help="Decode a single dataset")
+    decode_parser.add_argument("--dataset-id", required=True, help="Dataset identifier")
     decode_parser.add_argument(
         "--config", default="configs/base.yaml", help="Path to base config YAML"
     )
     decode_parser.add_argument(
         "--plots", default="configs/plots.yaml", help="Path to plots config YAML"
     )
-    decode_parser.add_argument(
-        "--outdir", default="results", help="Output directory"
-    )
+    decode_parser.add_argument("--outdir", default="results", help="Output directory")
 
     # Batch command
     batch_parser = subparsers.add_parser(
@@ -182,9 +173,7 @@ def main(argv: Optional[list] = None) -> int:
     batch_parser.add_argument(
         "--datasets", default="configs/datasets.yaml", help="Path to datasets registry"
     )
-    batch_parser.add_argument(
-        "--outdir", default="results", help="Output directory"
-    )
+    batch_parser.add_argument("--outdir", default="results", help="Output directory")
 
     args = parser.parse_args(argv)
 

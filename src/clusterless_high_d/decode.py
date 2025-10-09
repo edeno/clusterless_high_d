@@ -3,12 +3,12 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import yaml
 
 import numpy as np
+import yaml
 
-from .spyglass_io import load_dataset
 from .plotting import plot_posterior, plot_summary
+from .spyglass_io import load_dataset
 
 
 def run_decode(
@@ -73,11 +73,15 @@ def run_decode(
     metadata = data["metadata"]
 
     if spike_times is not None:
-        print(f"  Loaded {len(spike_times)} spikes with {waveform_features.shape[1]} features")
+        print(
+            f"  Loaded {len(spike_times)} spikes with {waveform_features.shape[1]} features"
+        )
     else:
         print(f"  Using placeholder data")
     print(f"  Position data: {len(time)} time bins")
-    print(f"  Metadata: {metadata['n_contacts']} contacts, region: {metadata.get('region', 'unknown')}")
+    print(
+        f"  Metadata: {metadata['n_contacts']} contacts, region: {metadata.get('region', 'unknown')}"
+    )
 
     # Check if high-dimensional
     n_contacts_threshold = config["high_dimensional"]["n_contacts_threshold"]
@@ -131,7 +135,8 @@ def run_decode(
             posterior=posterior,
             actual_position=position,
             config=plots_config,
-            output_path=plots_dir / f"posterior_over_time.{plots_config['general']['format']}",
+            output_path=plots_dir
+            / f"posterior_over_time.{plots_config['general']['format']}",
         )
 
         plot_summary(

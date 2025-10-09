@@ -153,9 +153,7 @@ def populate_waveform_features(
     elif isinstance(decoding_interval, list):
         decoding_intervals = decoding_interval
     else:
-        raise TypeError(
-            "decoding_interval must be a string or list of strings."
-        )
+        raise TypeError("decoding_interval must be a string or list of strings.")
 
     valid_decoding_intervals = []
     for interval_name in decoding_intervals:
@@ -209,16 +207,10 @@ def populate_waveform_features(
             )
 
             if not (UnitWaveformFeatures & features_key):
-                UnitWaveformFeatures.populate(
-                    features_key,
-                    reserve_jobs=True,
-                    **kwargs
-                )
+                UnitWaveformFeatures.populate(features_key, reserve_jobs=True, **kwargs)
                 logger.info(f"Waveform features extracted for {current_interval}")
             else:
-                logger.info(
-                    f"Waveform features already exist for {current_interval}"
-                )
+                logger.info(f"Waveform features already exist for {current_interval}")
 
             # Verify extraction succeeded
             if not (UnitWaveformFeatures & features_key):
@@ -234,9 +226,7 @@ def populate_waveform_features(
 
             if not (UnitWaveformFeaturesGroup & features_key):
                 UnitWaveformFeaturesGroup.populate(
-                    features_key,
-                    reserve_jobs=True,
-                    **kwargs
+                    features_key, reserve_jobs=True, **kwargs
                 )
                 logger.info(f"Waveform features grouped for {current_interval}")
             else:
@@ -254,9 +244,7 @@ def populate_waveform_features(
             logger.info(f"✓ Completed preprocessing for {current_interval}")
 
         except dj.errors.DataJointError as e:
-            logger.error(
-                f"DataJoint error processing interval {current_interval}: {e}"
-            )
+            logger.error(f"DataJoint error processing interval {current_interval}: {e}")
             failed_intervals += 1
         except Exception as e:
             logger.error(

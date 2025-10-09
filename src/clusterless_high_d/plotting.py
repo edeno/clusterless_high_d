@@ -1,13 +1,13 @@
 """Plotting functions for clusterless decoding results."""
 
+import warnings
 from pathlib import Path
 from typing import Optional
-import warnings
-
-import numpy as np
 
 # Import matplotlib with headless backend support
 import matplotlib
+import numpy as np
+
 try:
     import matplotlib.pyplot as plt
 except ImportError:
@@ -55,9 +55,7 @@ def plot_posterior(
     fonts_config = config.get("fonts", {})
 
     fig, axes = plt.subplots(
-        2, 1,
-        figsize=figsize_config.get("posterior", [12, 8]),
-        sharex=True
+        2, 1, figsize=figsize_config.get("posterior", [12, 8]), sharex=True
     )
 
     # Plot 1: Posterior heatmap (marginal over y, showing x vs time)
@@ -76,7 +74,9 @@ def plot_posterior(
     # Overlay actual position if requested
     if posterior_config.get("show_actual_position", True):
         # Normalize actual position to grid coordinates
-        pos_x_norm = actual_position[:, 0] / actual_position[:, 0].max() * posterior_x.shape[1]
+        pos_x_norm = (
+            actual_position[:, 0] / actual_position[:, 0].max() * posterior_x.shape[1]
+        )
         axes[0].plot(
             time,
             pos_x_norm,
@@ -90,7 +90,7 @@ def plot_posterior(
     axes[0].set_ylabel("X Position (bins)", fontsize=fonts_config.get("label_size", 12))
     axes[0].set_title(
         "Posterior Probability (marginalized over Y)",
-        fontsize=fonts_config.get("title_size", 14)
+        fontsize=fonts_config.get("title_size", 14),
     )
     plt.colorbar(im, ax=axes[0], label="Probability")
 
@@ -108,7 +108,9 @@ def plot_posterior(
     )
 
     if posterior_config.get("show_actual_position", True):
-        pos_y_norm = actual_position[:, 1] / actual_position[:, 1].max() * posterior_y.shape[1]
+        pos_y_norm = (
+            actual_position[:, 1] / actual_position[:, 1].max() * posterior_y.shape[1]
+        )
         axes[1].plot(
             time,
             pos_y_norm,
@@ -123,16 +125,12 @@ def plot_posterior(
     axes[1].set_ylabel("Y Position (bins)", fontsize=fonts_config.get("label_size", 12))
     axes[1].set_title(
         "Posterior Probability (marginalized over X)",
-        fontsize=fonts_config.get("title_size", 14)
+        fontsize=fonts_config.get("title_size", 14),
     )
     plt.colorbar(im2, ax=axes[1], label="Probability")
 
     plt.tight_layout()
-    plt.savefig(
-        output_path,
-        dpi=general_config.get("dpi", 300),
-        bbox_inches="tight"
-    )
+    plt.savefig(output_path, dpi=general_config.get("dpi", 300), bbox_inches="tight")
     plt.close()
 
 
@@ -194,7 +192,7 @@ def plot_summary(
         "r-",
         alpha=0.5,
         linewidth=2,
-        label="Actual"
+        label="Actual",
     )
     ax1.plot(
         decoded_position[:, 0],
@@ -202,7 +200,7 @@ def plot_summary(
         "b-",
         alpha=0.5,
         linewidth=2,
-        label="Decoded"
+        label="Decoded",
     )
     ax1.set_xlabel("X Position", fontsize=fonts_config.get("label_size", 12))
     ax1.set_ylabel("Y Position", fontsize=fonts_config.get("label_size", 12))
@@ -214,18 +212,20 @@ def plot_summary(
     if summary_config.get("show_error", True):
         ax2 = fig.add_subplot(gs[0, 1])
         position_error = np.sqrt(
-            (actual_position[:, 0] - decoded_position[:, 0]) ** 2 +
-            (actual_position[:, 1] - decoded_position[:, 1]) ** 2
+            (actual_position[:, 0] - decoded_position[:, 0]) ** 2
+            + (actual_position[:, 1] - decoded_position[:, 1]) ** 2
         )
         ax2.plot(time, position_error, "k-", linewidth=1)
         ax2.set_xlabel("Time (s)", fontsize=fonts_config.get("label_size", 12))
         ax2.set_ylabel("Position Error", fontsize=fonts_config.get("label_size", 12))
-        ax2.set_title("Decoding Error Over Time", fontsize=fonts_config.get("title_size", 14))
+        ax2.set_title(
+            "Decoding Error Over Time", fontsize=fonts_config.get("title_size", 14)
+        )
         ax2.axhline(
             position_error.mean(),
             color="r",
             linestyle="--",
-            label=f"Mean: {position_error.mean():.2f}"
+            label=f"Mean: {position_error.mean():.2f}",
         )
         ax2.legend()
 
@@ -241,14 +241,14 @@ def plot_summary(
             color="r",
             linestyle="--",
             linewidth=2,
-            label=f"Mean: {position_error.mean():.2f}"
+            label=f"Mean: {position_error.mean():.2f}",
         )
         ax3.axvline(
             np.median(position_error),
             color="b",
             linestyle="--",
             linewidth=2,
-            label=f"Median: {np.median(position_error):.2f}"
+            label=f"Median: {np.median(position_error):.2f}",
         )
         ax3.legend()
 
@@ -266,23 +266,29 @@ def plot_summary(
         )
 
         # Mark actual and decoded positions
-        actual_x = actual_position[idx, 0] / actual_position[:, 0].max() * posterior.shape[1]
-        actual_y = actual_position[idx, 1] / actual_position[:, 1].max() * posterior.shape[2]
+        actual_x = (
+            actual_position[idx, 0] / actual_position[:, 0].max() * posterior.shape[1]
+        )
+        actual_y = (
+            actual_position[idx, 1] / actual_position[:, 1].max() * posterior.shape[2]
+        )
         ax.plot(actual_x, actual_y, "r*", markersize=15, label="Actual")
 
-        decoded_x = decoded_position[idx, 0] / actual_position[:, 0].max() * posterior.shape[1]
-        decoded_y = decoded_position[idx, 1] / actual_position[:, 1].max() * posterior.shape[2]
+        decoded_x = (
+            decoded_position[idx, 0] / actual_position[:, 0].max() * posterior.shape[1]
+        )
+        decoded_y = (
+            decoded_position[idx, 1] / actual_position[:, 1].max() * posterior.shape[2]
+        )
         ax.plot(decoded_x, decoded_y, "bx", markersize=15, label="Decoded")
 
-        ax.set_title(f"t = {time[idx]:.2f}s", fontsize=fonts_config.get("title_size", 14))
+        ax.set_title(
+            f"t = {time[idx]:.2f}s", fontsize=fonts_config.get("title_size", 14)
+        )
         ax.set_xlabel("X Position", fontsize=fonts_config.get("label_size", 12))
         ax.set_ylabel("Y Position", fontsize=fonts_config.get("label_size", 12))
         ax.legend()
         plt.colorbar(im, ax=ax, label="Probability")
 
-    plt.savefig(
-        output_path,
-        dpi=general_config.get("dpi", 300),
-        bbox_inches="tight"
-    )
+    plt.savefig(output_path, dpi=general_config.get("dpi", 300), bbox_inches="tight")
     plt.close()

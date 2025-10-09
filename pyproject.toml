@@ -3,11 +3,9 @@ name = "clusterless-high-d"
 version = "0.1.0"
 description = "Lightweight, config-driven clusterless decoding for high-dimensional hippocampal datasets"
 readme = "README.md"
-authors = [
-    { name = "Eric Denovellis", email = "edenovellis@gmail.com" }
-]
+authors = [{ name = "Eric Denovellis", email = "edenovellis@gmail.com" }]
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -74,21 +72,21 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
 ]
 ignore = [
-    "E501",  # line too long (handled by black)
+    "E501", # line too long (handled by black)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"__init__.py" = ["F401"] # Allow unused imports in __init__.py
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
