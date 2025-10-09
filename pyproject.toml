@@ -1,17 +1,104 @@
 [project]
 name = "clusterless-high-d"
 version = "0.1.0"
-description = "Add your description here"
+description = "Lightweight, config-driven clusterless decoding for high-dimensional hippocampal datasets"
 readme = "README.md"
 authors = [
     { name = "Eric Denovellis", email = "edenovellis@gmail.com" }
 ]
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.10"
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+    "scipy>=1.10.0",
+    "spyglass-neuro @ git+https://github.com/LorenFrankLab/spyglass.git",
+    "non_local_detector @ git+https://github.com/Eden-Kramer-Lab/non_local_detector.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ipython>=8.12.0",
+    "jupyter>=1.0.0",
+    "notebook>=7.0.0",
+]
 
 [project.scripts]
-clusterless-high-d = "clusterless_high_d:main"
+clusterless-high-d = "clusterless_high_d.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.8.23,<0.9.0"]
-build-backend = "uv_build"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["clusterless_high_d"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--color=yes",
+    "--cov=clusterless_high_d",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+]

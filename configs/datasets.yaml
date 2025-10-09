@@ -1,0 +1,45 @@
+# Dataset registry for batch processing
+# Each entry maps a dataset_id to Spyglass query parameters and metadata
+
+rat01_day1:
+  # Spyglass query parameters
+  spyglass_query:
+    nwb_file_name: 'rat01_20230101.nwb'
+    interval_list_name: 'run_task'
+    sort_group_id: 0
+
+  # Metadata
+  region: 'CA1'
+  n_contacts: 16
+  description: 'Rat01 day 1, high-D CA1 recording during run task'
+
+rat01_day2:
+  spyglass_query:
+    nwb_file_name: 'rat01_20230102.nwb'
+    interval_list_name: 'run_task'
+    sort_group_id: 0
+
+  region: 'CA1'
+  n_contacts: 16
+  description: 'Rat01 day 2, high-D CA1 recording during run task'
+
+rat02_day1:
+  spyglass_query:
+    nwb_file_name: 'rat02_20230201.nwb'
+    interval_list_name: 'run_task'
+    sort_group_id: 0
+
+  region: 'CA3'
+  n_contacts: 12
+  description: 'Rat02 day 1, high-D CA3 recording during run task'
+
+# Example low-dimensional dataset for comparison
+rat03_day1_low_d:
+  spyglass_query:
+    nwb_file_name: 'rat03_20230301.nwb'
+    interval_list_name: 'run_task'
+    sort_group_id: 0
+
+  region: 'CA1'
+  n_contacts: 4
+  description: 'Rat03 day 1, low-D CA1 recording for baseline comparison'
