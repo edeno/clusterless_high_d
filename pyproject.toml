@@ -25,7 +25,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "scipy>=1.10.0",
     "spyglass-neuro @ git+https://github.com/LorenFrankLab/spyglass.git",
-    "non_local_detector @ git+https://github.com/Eden-Kramer-Lab/non_local_detector.git",
+    "non_local_detector @ git+https://github.com/LorenFrankLab/non_local_detector.git",
 ]
 
 [project.optional-dependencies]
