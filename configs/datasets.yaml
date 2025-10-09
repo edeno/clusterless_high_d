@@ -1,45 +1,80 @@
 # Dataset registry for batch processing
 # Each entry maps a dataset_id to Spyglass query parameters and metadata
+#
+# Prerequisites:
+# 1. NWB file must be imported into Spyglass (Nwbfile table)
+# 2. Intervals must be defined (IntervalList table)
+# 3. Position must be processed (PositionGroup table)
+# 4. Marks must be extracted (run preprocessing.populate_waveform_features())
+#
+# After preprocessing, these keys will fetch data from:
+# - UnitWaveformFeaturesGroup (spike times + waveform features)
+# - PositionGroup (position trajectories)
+# - IntervalList (time windows for analysis)
 
+# Example high-dimensional dataset (realistic Spyglass keys)
 rat01_day1:
-  # Spyglass query parameters
+  # Spyglass query parameters for fetching preprocessed data
   spyglass_query:
-    nwb_file_name: 'rat01_20230101.nwb'
-    interval_list_name: 'run_task'
-    sort_group_id: 0
+    nwb_file_name: 'mediumnwb20230802_.nwb'  # Must exist in Spyglass
+    waveform_features_group_name: 'high_d_ca1_group'  # From preprocessing
+    position_group_name: 'default_position'  # From PositionGroup
+    interval_list_name: 'pos 0 valid times'  # From IntervalList
+
+  # Preprocessing parameters (used by preprocessing.populate_waveform_features)
+  preprocessing:
+    encoding_interval: 'pos 0 valid times'  # Training period
+    decoding_interval: 'pos 0 valid times'  # Test period
 
   # Metadata
   region: 'CA1'
   n_contacts: 16
-  description: 'Rat01 day 1, high-D CA1 recording during run task'
+  description: 'High-D CA1 recording with 16-contact probe'
 
+# Example with multiple decoding intervals
 rat01_day2:
   spyglass_query:
-    nwb_file_name: 'rat01_20230102.nwb'
-    interval_list_name: 'run_task'
-    sort_group_id: 0
+    nwb_file_name: 'mediumnwb20230803_.nwb'
+    waveform_features_group_name: 'high_d_ca1_day2'
+    position_group_name: 'default_position'
+    interval_list_name: 'pos 0 valid times'
+
+  preprocessing:
+    encoding_interval: 'pos 0 valid times'
+    decoding_interval: ['pos 0 valid times', 'pos 1 valid times']  # Multiple intervals
 
   region: 'CA1'
   n_contacts: 16
-  description: 'Rat01 day 2, high-D CA1 recording during run task'
+  description: 'High-D CA1 day 2, testing multiple intervals'
 
+# CA3 dataset
 rat02_day1:
   spyglass_query:
-    nwb_file_name: 'rat02_20230201.nwb'
-    interval_list_name: 'run_task'
-    sort_group_id: 0
+    nwb_file_name: 'mediumnwb20230901_.nwb'
+    waveform_features_group_name: 'high_d_ca3_group'
+    position_group_name: 'default_position'
+    interval_list_name: '02_r1'
+
+  preprocessing:
+    encoding_interval: '02_r1'
+    decoding_interval: '02_r1'
 
   region: 'CA3'
   n_contacts: 12
-  description: 'Rat02 day 1, high-D CA3 recording during run task'
+  description: 'High-D CA3 recording with 12-contact probe'
 
-# Example low-dimensional dataset for comparison
+# Low-dimensional baseline for comparison
 rat03_day1_low_d:
   spyglass_query:
-    nwb_file_name: 'rat03_20230301.nwb'
-    interval_list_name: 'run_task'
-    sort_group_id: 0
+    nwb_file_name: 'mediumnwb20230701_.nwb'
+    waveform_features_group_name: 'low_d_ca1_group'
+    position_group_name: 'default_position'
+    interval_list_name: 'pos 0 valid times'
+
+  preprocessing:
+    encoding_interval: 'pos 0 valid times'
+    decoding_interval: 'pos 0 valid times'
 
   region: 'CA1'
   n_contacts: 4
-  description: 'Rat03 day 1, low-D CA1 recording for baseline comparison'
+  description: 'Low-D CA1 baseline (4 contacts) for comparison'

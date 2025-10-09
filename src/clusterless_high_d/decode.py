@@ -66,28 +66,51 @@ def run_decode(
     data = load_dataset(dataset_id)
 
     # Extract data components
-    features = data["features"]
+    spike_times = data.get("spike_times")
+    waveform_features = data.get("features")
     position = data["position"]
     time = data["time"]
     metadata = data["metadata"]
 
-    print(f"  Loaded {len(time)} time bins, {metadata['n_contacts']} contacts")
+    if spike_times is not None:
+        print(f"  Loaded {len(spike_times)} spikes with {waveform_features.shape[1]} features")
+    else:
+        print(f"  Using placeholder data")
+    print(f"  Position data: {len(time)} time bins")
+    print(f"  Metadata: {metadata['n_contacts']} contacts, region: {metadata.get('region', 'unknown')}")
 
     # Check if high-dimensional
     n_contacts_threshold = config["high_dimensional"]["n_contacts_threshold"]
     is_high_d = metadata["n_contacts"] >= n_contacts_threshold
     print(f"  High-dimensional: {is_high_d} (threshold: {n_contacts_threshold})")
 
-    # Run decoding using non_local_detector
-    # TODO: Replace this placeholder with actual non_local_detector call
+    # Run decoding
+    # TODO: Replace placeholder with actual non_local_detector call
     print("Running decoder...")
-    posterior = _run_decoder_placeholder(
-        features=features,
-        position=position,
-        time=time,
-        config=config,
-        is_high_d=is_high_d,
-    )
+    decoder_type = config.get("decoder", {}).get("type", "placeholder")
+
+    if spike_times is not None and waveform_features is not None:
+        # Have real marks - ready for actual decoder
+        print(f"  Decoder type: {decoder_type}")
+        posterior = _run_decoder_placeholder(
+            spike_times=spike_times,
+            waveform_features=waveform_features,
+            position=position,
+            time=time,
+            config=config,
+            is_high_d=is_high_d,
+        )
+    else:
+        # Fallback to synthetic data for testing
+        print("  Using placeholder decoder with synthetic data")
+        posterior = _run_decoder_placeholder(
+            spike_times=None,
+            waveform_features=None,
+            position=position,
+            time=time,
+            config=config,
+            is_high_d=is_high_d,
+        )
 
     # Save outputs
     print("Saving outputs...")
@@ -132,7 +155,8 @@ def run_decode(
 
 
 def _run_decoder_placeholder(
-    features: np.ndarray,
+    spike_times: np.ndarray,
+    waveform_features: np.ndarray,
     position: np.ndarray,
     time: np.ndarray,
     config: dict,
@@ -142,8 +166,10 @@ def _run_decoder_placeholder(
 
     Parameters
     ----------
-    features : np.ndarray
-        Neural features (n_time, n_features)
+    spike_times : np.ndarray
+        Spike times (n_spikes,) or None for synthetic data
+    waveform_features : np.ndarray
+        Waveform features (n_spikes, n_features) or None for synthetic data
     position : np.ndarray
         Actual positions (n_time, 2)
     time : np.ndarray
@@ -157,15 +183,42 @@ def _run_decoder_placeholder(
     -------
     np.ndarray
         Posterior probability (n_time, n_x_bins, n_y_bins)
-    """
-    # TODO: Replace with actual non_local_detector call
-    # from non_local_detector import ...
 
+    Notes
+    -----
+    TODO: Replace with actual decoder implementation:
+
+    For non_local_detector integration:
+    ```python
+    from non_local_detector import ClusterlessDecoder
+
+    # Initialize decoder
+    decoder = ClusterlessDecoder(
+        position_range=config['decoding']['position_range'],
+        spatial_resolution=config['decoding']['spatial_resolution'],
+        **config['decoder']
+    )
+
+    # Fit on encoding data
+    decoder.fit(spike_times, waveform_features, position)
+
+    # Decode
+    posterior = decoder.predict(spike_times, waveform_features, time)
+    ```
+
+    For GPU-accelerated or custom decoders:
+    - Branch on config['decoder']['type']
+    - Implement different decoder classes
+    - Compare performance/accuracy across implementations
+    """
     # For now, return a placeholder posterior
     n_time = len(time)
     n_x_bins = 50
     n_y_bins = 50
 
+    if spike_times is not None:
+        print(f"  [PLACEHOLDER] Would decode {len(spike_times)} spikes")
+        print(f"  [PLACEHOLDER] Feature dimensions: {waveform_features.shape}")
     print("  [PLACEHOLDER] Using dummy decoder - replace with non_local_detector")
 
     # Create random posterior for demonstration
