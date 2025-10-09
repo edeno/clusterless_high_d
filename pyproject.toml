@@ -3,7 +3,7 @@ name = "clusterless-high-d"
 version = "0.1.0"
 description = "Lightweight, config-driven clusterless decoding for high-dimensional hippocampal datasets"
 readme = "README.md"
-authors = [{ name = "Eric Denovellis", email = "edenovellis@gmail.com" }]
+authors = [{ name = "Eric Denovellis", email = "eric.denovellis@ucsf.edu" }]
 requires-python = ">=3.10"
 license = { text = "MIT" }
 classifiers = [
