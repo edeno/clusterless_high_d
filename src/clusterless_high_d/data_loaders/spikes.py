@@ -289,22 +289,50 @@ def filter_spike_times(
     return filtered_times, filtered_feats if waveform_features is not None else None
 
 
-def _import_unit_waveform_features():
-    """Import UnitWaveformFeatures bypassing the broken spyglass.decoding __init__.
+def _read_waveform_features_from_nwb(
+    analysis_file_name: str,
+    object_id: str,
+) -> tuple[list[NDArray[np.float64]], list[NDArray[np.float64]]]:
+    """Read spike times and waveform features from an analysis NWB file.
 
-    The spyglass.decoding package fails to import because
-    non_local_detector's API changed. We import the waveform_features
-    module directly to avoid triggering that error.
+    Parameters
+    ----------
+    analysis_file_name : str
+        Spyglass analysis NWB file name.
+    object_id : str
+        NWB object ID for the units table.
 
     Returns
     -------
-    UnitWaveformFeatures : datajoint.Table
-        The UnitWaveformFeatures table class.
+    spike_times : list[NDArray]
+        Spike times per unit.
+    features : list[NDArray]
+        Waveform features per unit, shape ``(n_spikes, n_features)``.
     """
-    import importlib
+    import pynwb
 
-    mod = importlib.import_module("spyglass.decoding.v1.waveform_features")
-    return mod.UnitWaveformFeatures
+    from spyglass.common.common_nwbfile import AnalysisNwbfile
+
+    path = AnalysisNwbfile.get_abs_path(analysis_file_name)
+    with pynwb.NWBHDF5IO(path, "r", load_namespaces=True) as io:
+        nwbf = io.read()
+        units = nwbf.units
+        if units is None or len(units) == 0:
+            return [], []
+
+        spike_times_raw = units["spike_times"][:]
+        feature_cols = [c for c in units.colnames if c not in ("spike_times", "id")]
+
+        spike_times_list = []
+        features_list = []
+        for i in range(len(spike_times_raw)):
+            st = np.asarray(spike_times_raw[i], dtype=np.float64)
+            feat_arrays = [np.asarray(units[col][i]) for col in feature_cols]
+            feat = np.concatenate(feat_arrays, axis=1) if feat_arrays else np.empty((len(st), 0))
+            spike_times_list.append(st)
+            features_list.append(feat)
+
+    return spike_times_list, features_list
 
 
 def _load_clusterless(
@@ -312,6 +340,10 @@ def _load_clusterless(
     position_time: NDArray[np.float64],
 ) -> dict[str, dict]:
     """Load clusterless waveform features by brain area.
+
+    Uses ``dj.VirtualModule`` to access the ``UnitWaveformFeatures`` table
+    without importing the broken ``spyglass.decoding`` package, then reads
+    the analysis NWB files directly with pynwb.
 
     Parameters
     ----------
@@ -323,19 +355,20 @@ def _load_clusterless(
     Returns
     -------
     dict[str, dict]
-        Brain area name → {"spike_times": [...], "waveform_features": [...]}.
+        Brain area name → ``{"spike_times": [...], "waveform_features": [...]}``.
         Only areas with waveform feature data are included.
     """
+    import datajoint as dj
+
     from spyglass.spikesorting.spikesorting_merge import SpikeSortingOutput
     from spyglass.spikesorting.v1.curation import CurationV1
     from spyglass.spikesorting.v1.recording import SpikeSortingRecordingSelection
     from spyglass.spikesorting.v1.sorting import SpikeSortingSelection
 
-    try:
-        UnitWaveformFeatures = _import_unit_waveform_features()
-    except Exception as e:
-        logger.warning("Cannot import UnitWaveformFeatures: %s", e)
-        return {}
+    # Access UnitWaveformFeatures via VirtualModule to bypass the broken
+    # spyglass.decoding import (non_local_detector API incompatibility).
+    wf_schema = dj.VirtualModule("wf", "decoding_waveform_features")
+    UnitWaveformFeatures = wf_schema.UnitWaveformFeatures
 
     area_map = get_sort_group_brain_areas(nwb_file_name)
     sg_to_area: dict[int, str] = {}
@@ -383,13 +416,16 @@ def _load_clusterless(
             if len(wf_entries) == 0:
                 continue
 
-            # Fetch spike times and features
+            row = wf_entries.fetch1()
+
             try:
-                spike_times_list, features_list = wf_entries.fetch_data()
+                spike_times_list, features_list = _read_waveform_features_from_nwb(
+                    row["analysis_file_name"], row["object_id"]
+                )
             except Exception as e:
                 logger.warning(
-                    "Failed to fetch waveform features for merge_id %s: %s",
-                    merge_id,
+                    "Failed to read waveform features for %s: %s",
+                    row["analysis_file_name"],
                     e,
                 )
                 continue
