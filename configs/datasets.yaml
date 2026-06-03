@@ -1,80 +1,38 @@
 # Dataset registry for batch processing
 # Each entry maps a dataset_id to Spyglass query parameters and metadata
 #
-# Prerequisites:
-# 1. NWB file must be imported into Spyglass (Nwbfile table)
-# 2. Intervals must be defined (IntervalList table)
-# 3. Position must be processed (PositionGroup table)
-# 4. Marks must be extracted (run preprocessing.populate_waveform_features())
-#
-# After preprocessing, these keys will fetch data from:
-# - UnitWaveformFeaturesGroup (spike times + waveform features)
-# - PositionGroup (position trajectories)
-# - IntervalList (time windows for analysis)
+# brain_areas: maps brain area name → sorted_spikes_group_name
+#   The area name must match BrainRegion.region_name in Spyglass.
+#   Use `get_sort_group_brain_areas(nwb_file_name)` to discover available areas.
+#   Use `SortedSpikesGroup & {"nwb_file_name": ...}` to list available groups.
 
-# Example high-dimensional dataset (realistic Spyglass keys)
-rat01_day1:
-  # Spyglass query parameters for fetching preprocessed data
-  spyglass_query:
-    nwb_file_name: 'mediumnwb20230802_.nwb'  # Must exist in Spyglass
-    waveform_features_group_name: 'high_d_ca1_group'  # From preprocessing
-    position_group_name: 'default_position'  # From PositionGroup
-    interval_list_name: 'pos 0 valid times'  # From IntervalList
+SC10_2025_06_28:
+  nwb_file_name: 'SC10420250628_.nwb'
+  interval_list_name: 'pos 3 valid times'
+  position_source: 'TrodesPosV1'
 
-  # Preprocessing parameters (used by preprocessing.populate_waveform_features)
-  preprocessing:
-    encoding_interval: 'pos 0 valid times'  # Training period
-    decoding_interval: 'pos 0 valid times'  # Test period
+  brain_areas:
+    Cornu ammonis 1 (CA1):
+      sorted_spikes_group_name: 'CA1_all_probes'
+    Cingulate region (CgR):
+      sorted_spikes_group_name: 'PFC_exclude_all_other'
 
-  # Metadata
-  region: 'CA1'
-  n_contacts: 16
-  description: 'High-D CA1 recording with 16-contact probe'
+  description: 'SC10 recording from 2025-06-28'
 
-# Example with multiple decoding intervals
-rat01_day2:
-  spyglass_query:
-    nwb_file_name: 'mediumnwb20230803_.nwb'
-    waveform_features_group_name: 'high_d_ca1_day2'
-    position_group_name: 'default_position'
-    interval_list_name: 'pos 0 valid times'
+SC10_2025_06_16:
+  nwb_file_name: 'SC10420250616_.nwb'
+  interval_list_name: 'pos 0 valid times'  # TODO: verify correct run epoch
+  position_source: 'TrodesPosV1'
 
-  preprocessing:
-    encoding_interval: 'pos 0 valid times'
-    decoding_interval: ['pos 0 valid times', 'pos 1 valid times']  # Multiple intervals
+  brain_areas: {}  # No SortedSpikesGroup available; will build from scratch
 
-  region: 'CA1'
-  n_contacts: 16
-  description: 'High-D CA1 day 2, testing multiple intervals'
+  description: 'SC10 recording from 2025-06-16'
 
-# CA3 dataset
-rat02_day1:
-  spyglass_query:
-    nwb_file_name: 'mediumnwb20230901_.nwb'
-    waveform_features_group_name: 'high_d_ca3_group'
-    position_group_name: 'default_position'
-    interval_list_name: '02_r1'
+L14_2024_06_04:
+  nwb_file_name: 'L1420240604_.nwb'
+  interval_list_name: 'pos 0 valid times'  # TODO: verify correct run epoch
+  position_source: 'DLCPosV1'
 
-  preprocessing:
-    encoding_interval: '02_r1'
-    decoding_interval: '02_r1'
+  brain_areas: {}  # No SortedSpikesGroup available; will build from scratch
 
-  region: 'CA3'
-  n_contacts: 12
-  description: 'High-D CA3 recording with 12-contact probe'
-
-# Low-dimensional baseline for comparison
-rat03_day1_low_d:
-  spyglass_query:
-    nwb_file_name: 'mediumnwb20230701_.nwb'
-    waveform_features_group_name: 'low_d_ca1_group'
-    position_group_name: 'default_position'
-    interval_list_name: 'pos 0 valid times'
-
-  preprocessing:
-    encoding_interval: 'pos 0 valid times'
-    decoding_interval: 'pos 0 valid times'
-
-  region: 'CA1'
-  n_contacts: 4
-  description: 'Low-D CA1 baseline (4 contacts) for comparison'
+  description: 'L14 recording from 2024-06-04'

@@ -24,8 +24,9 @@ logger = logging.getLogger(__name__)
 def _load_sorted_spikes_from_group(
     nwb_file_name: str,
     position_time: NDArray[np.float64],
+    brain_areas: dict[str, dict] | None = None,
 ) -> dict[str, list[NDArray[np.float64]]] | None:
-    """Load sorted spikes using SortedSpikesGroup if available.
+    """Load sorted spikes using SortedSpikesGroup.
 
     Parameters
     ----------
@@ -33,6 +34,11 @@ def _load_sorted_spikes_from_group(
         NWB file name.
     position_time : NDArray[np.float64]
         Position timestamps for time-slicing.
+    brain_areas : dict[str, dict] or None, optional
+        Brain area config from datasets.yaml. Maps area name →
+        ``{"sorted_spikes_group_name": "..."}``). If provided, only
+        the specified groups are loaded. If None or empty, loads all
+        available groups.
 
     Returns
     -------
@@ -49,18 +55,45 @@ def _load_sorted_spikes_from_group(
     if len(ssg) == 0:
         return None
 
-    # Map sort group brain areas to match group names to regions
+    time_slice = [float(position_time[0]), float(position_time[-1])]
+    result: dict[str, list[NDArray[np.float64]]] = defaultdict(list)
+
+    # If brain_areas config specifies groups, use those directly
+    if brain_areas:
+        for area_name, area_cfg in brain_areas.items():
+            group_name = area_cfg.get("sorted_spikes_group_name")
+            if not group_name:
+                continue
+            group_entries = ssg & {"sorted_spikes_group_name": group_name}
+            if len(group_entries) == 0:
+                logger.warning(
+                    "SortedSpikesGroup '%s' not found for %s",
+                    group_name,
+                    nwb_file_name,
+                )
+                continue
+            group_key = group_entries.fetch1("KEY")
+            spike_times = SortedSpikesGroup.fetch_spike_data(
+                group_key, time_slice=time_slice
+            )
+            if spike_times:
+                result[area_name].extend(spike_times)
+                logger.info(
+                    "Loaded %d units from SortedSpikesGroup '%s' → %s",
+                    len(spike_times),
+                    group_name,
+                    area_name,
+                )
+        return dict(result) if result else None
+
+    # No brain_areas config — discover areas from all groups
     area_map = get_sort_group_brain_areas(nwb_file_name)
-    # Invert: sort_group_id → area_name
     sg_to_area: dict[int, str] = {}
     for area_name, sg_ids in area_map.items():
         for sg_id in sg_ids:
             sg_to_area[sg_id] = area_name
 
     groups = ssg.fetch(as_dict=True)
-    time_slice = [float(position_time[0]), float(position_time[-1])]
-
-    result: dict[str, list[NDArray[np.float64]]] = defaultdict(list)
 
     for group in groups:
         group_name = group["sorted_spikes_group_name"]
@@ -376,6 +409,7 @@ def _load_clusterless(
 def load_spikes_by_area(
     nwb_file_name: str,
     position_time: NDArray[np.float64],
+    brain_areas: dict[str, dict] | None = None,
 ) -> dict[str, dict]:
     """Load spike data for all brain areas in an NWB file.
 
@@ -390,6 +424,11 @@ def load_spikes_by_area(
     position_time : NDArray[np.float64]
         Position timestamps from the position DataFrame index. Spike times
         are bounded to ``[position_time[0], position_time[-1]]``.
+    brain_areas : dict[str, dict] or None, optional
+        Brain area config from datasets.yaml. Maps area name →
+        ``{"sorted_spikes_group_name": "..."}``. When provided, only
+        the specified SortedSpikesGroups are loaded. When None, all
+        available groups are loaded (or built from scratch).
 
     Returns
     -------
@@ -403,7 +442,7 @@ def load_spikes_by_area(
     """
     # Try SortedSpikesGroup first, fall back to building from scratch
     sorted_by_area = _load_sorted_spikes_from_group(
-        nwb_file_name, position_time
+        nwb_file_name, position_time, brain_areas=brain_areas
     )
     if sorted_by_area is None:
         logger.info(
