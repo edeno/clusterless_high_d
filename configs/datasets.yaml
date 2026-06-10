@@ -21,18 +21,58 @@ SC10_2025_06_28:
 
 SC10_2025_06_16:
   nwb_file_name: 'SC10420250616_.nwb'
-  interval_list_name: 'pos 0 valid times'  # TODO: verify correct run epoch
+  # BLOCKED: NO position data (no TrodesPosV1/DLCPosV1 entries, no PositionSource)
+  # and NO clusterless waveform features. Sorted spikes exist (PFC + hippocampus,
+  # 12 sort groups, buildable from CurationV1). Needs position processing AND
+  # clusterless extraction before it can be used for decoding.
+  interval_list_name: 'pos 0 valid times'  # does NOT exist — placeholder
   position_source: 'TrodesPosV1'
 
   brain_areas: {}  # No SortedSpikesGroup available; will build from scratch
 
-  description: 'SC10 recording from 2025-06-16'
+  description: 'SC10 recording from 2025-06-16 (BLOCKED: no position, no clusterless)'
+
+Jacob_2025_06_18:
+  nwb_file_name: 'Jacob20250618_.nwb'
+  # W-track RUN position is from DLC (DLCPosV1), keyed by EPOCH (not by a
+  # "pos N valid times" interval — those are LED/Trodes and only exist for the
+  # 6 SLEEP epochs s1-s6). DLC run epochs: 2(r1), 4(r2), 6(r3), 8(r4), 10(r5).
+  # Verified W-track shape + movement for 2, 4, 6, 10; epoch 8 (r4) is
+  # degenerate (8x11 cm, ~0% moving) — DLC tracking failed there, do not use.
+  position_source: 'DLCPosV1'
+  epoch: 2  # r1: ~30k samples, 49% moving. Alternatives: 4 (r2), 6 (r3), 10 (r5)
+  max_speed: 120     # cm/s; flags DLC tracking jumps (rat tops out ~80-100)
+  interpolate: true  # bridge short dropout gaps instead of dropping
+
+  # Brain regions are hemisphere-split in Spyglass:
+  #   Left CA1 Hippocampus  -> sort groups [0, 1, 2, 3]
+  #   Right CA1 Hippocampus -> sort groups [4, 5, 6, 7]
+  # The only SortedSpikesGroup ('Ca1_test') spans both hemispheres (141 units),
+  # so sorted spikes are labeled with a single 'CA1' area.
+  brain_areas:
+    CA1:
+      sorted_spikes_group_name: 'Ca1_test'
+
+  # Clusterless: UnitWaveformFeaturesGroup 'CA1_group' = all 8 probes (sort
+  # groups 0-7). The loader uses all sort groups for the NWB. Theta-detection
+  # good electrodes cover sort groups 0-6 only (probe 7 has no good contacts);
+  # to restrict later, limit to [0,1,2,3,4,5,6].
+  # NOTE: DLC run position has tracking jumps (max speed ~800 cm/s); apply a
+  # speed/jump filter before decoding.
+
+  description: 'Jacob W-track recording from 2025-06-18 (DLC run position, CA1)'
 
 L14_2024_06_04:
   nwb_file_name: 'L1420240604_.nwb'
-  interval_list_name: 'pos 0 valid times'  # TODO: verify correct run epoch
+  # DLCPosV1 is keyed by EPOCH. Run epochs: 2, 4, 6 (epoch 4 = most movement).
   position_source: 'DLCPosV1'
+  epoch: 4  # ~30k samples, 30% moving. Alternatives: 2, 6
+  max_speed: 120     # cm/s; flags DLC tracking jumps (rat tops out ~80-100)
+  interpolate: true  # bridge short dropout gaps instead of dropping
 
-  brain_areas: {}  # No SortedSpikesGroup available; will build from scratch
+  # Both sorted and clusterless present in right CA1 (4 sort groups each).
+  # No SortedSpikesGroup exists -> sorted spikes are built from the CurationV1
+  # chain (loader fallback) when brain_areas is empty.
+  brain_areas: {}
 
-  description: 'L14 recording from 2024-06-04'
+  description: 'L14 right-CA1 recording from 2024-06-04 (DLC run position)'
