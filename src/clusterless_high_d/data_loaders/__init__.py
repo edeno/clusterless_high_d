@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 _LAZY_EXPORTS = {
     "load_position": "clusterless_high_d.data_loaders.position",
     "load_spikes_by_area": "clusterless_high_d.data_loaders.spikes",
+    "detect_coincident_spikes": "clusterless_high_d.data_loaders.spikes",
     "get_sort_group_brain_areas": "clusterless_high_d.data_loaders.utils",
 }
 
@@ -31,5 +32,8 @@ def __getattr__(name: str):
 
 if TYPE_CHECKING:
     from .position import load_position  # noqa: F401
-    from .spikes import load_spikes_by_area  # noqa: F401
+    from .spikes import (  # noqa: F401
+        detect_coincident_spikes,
+        load_spikes_by_area,
+    )
     from .utils import get_sort_group_brain_areas  # noqa: F401

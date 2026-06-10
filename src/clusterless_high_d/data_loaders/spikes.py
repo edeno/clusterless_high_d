@@ -14,7 +14,9 @@ import logging
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 from numpy.typing import NDArray
+from scipy.ndimage import label
 
 from .utils import get_sort_group_brain_areas
 
@@ -289,6 +291,124 @@ def filter_spike_times(
     return filtered_times, filtered_feats if waveform_features is not None else None
 
 
+def detect_coincident_spikes(
+    spike_times: list[NDArray[np.float64]],
+    spike_closeness_threshold: float = 0.00004,
+    max_coincident_fraction: float = 0.33,
+) -> tuple[list[NDArray[np.float64]], list[NDArray[np.intp]]]:
+    """Detect and remove coincident spikes across sort groups (probes).
+
+    Coincident spikes (within a tight time threshold across more than a
+    fraction of spatially-separate sort groups) are almost certainly
+    electrical/movement artifacts rather than biological neural activity:
+    real neural propagation delays are ~1-10 ms, so threshold crossings within
+    tens of microseconds across multiple probes are a shared electrical event.
+
+    Ported from ``continuum_swr_replay.data_loaders.spikes`` (tetrode version);
+    here the "sort groups" are high-density probe segments rather than tetrodes,
+    but the principle is identical.
+
+    Parameters
+    ----------
+    spike_times : list[NDArray[np.float64]]
+        List of arrays, each containing spike times (seconds) for one sort
+        group. Order is preserved 1:1 in the output.
+    spike_closeness_threshold : float, optional
+        Time threshold for considering spikes coincident (seconds). Default
+        40 us (0.00004 s).
+    max_coincident_fraction : float, optional
+        Fraction of sort groups that must fire together within the threshold to
+        flag the cluster as artifact. Default 0.33; real neural synchrony rarely
+        exceeds ~20% of channels simultaneously.
+
+    Returns
+    -------
+    tuple[list[NDArray[np.float64]], list[NDArray[np.intp]]]
+        - filtered_spike_times: arrays with coincident spikes removed, one per
+          input sort group (1:1 with input). Fully-removed groups get empty
+          arrays. Returns ``[]`` if input is empty / all-empty.
+        - filtered_time_bin_ind: indices of kept spikes within each original
+          input array, one per sort group (1:1 with input), for filtering
+          waveform features in lockstep. Returns ``[]`` on empty input.
+    """
+    if not spike_times or all(len(st) == 0 for st in spike_times):
+        return [], []
+
+    concat_spike_times = np.concatenate(spike_times)
+    sort_group_id = np.concatenate(
+        [
+            np.ones(len(spike_time), dtype=int) * i
+            for i, spike_time in enumerate(spike_times)
+        ]
+    )
+    time_bin_ind = np.concatenate(
+        [np.arange(len(spike_time), dtype=int) for spike_time in spike_times]
+    )
+
+    sort_ind = np.argsort(concat_spike_times)
+    sorted_spike_times = concat_spike_times[sort_ind]
+    sort_group_id = sort_group_id[sort_ind]
+    time_bin_ind = time_bin_ind[sort_ind]
+
+    is_close = np.diff(sorted_spike_times) < spike_closeness_threshold
+    is_close = np.concatenate([[False], is_close])
+    labels, _ = label(is_close)
+
+    # ``scipy.ndimage.label`` leaves the first spike of each close cluster with
+    # label=0 because ``np.diff`` is backward-looking. Extend each labeled run
+    # backward by one spike so the cluster's leading spike contributes to
+    # ``coincident_fraction`` (otherwise a 2-of-4 coincidence evaluates as 1/4
+    # and slips through the 0.33 threshold).
+    labels_arr = np.asarray(labels)
+    next_label = np.concatenate([labels_arr[1:], [0]])
+    cluster_labels = np.where(
+        (labels_arr == 0) & (next_label > 0), next_label, labels_arr
+    )
+
+    spike_events = pd.DataFrame(
+        {
+            "labels": cluster_labels,
+            "sort_group_id": sort_group_id,
+            "time_bin_ind": time_bin_ind,
+            "spike_times": sorted_spike_times,
+        },
+    )
+    n_sort_groups = len(spike_times)
+    coincident_fraction = (
+        spike_events.loc[spike_events.labels > 0]
+        .groupby("labels")
+        .sort_group_id.nunique()
+        / n_sort_groups
+    )
+    artifact_labels = coincident_fraction[
+        coincident_fraction > max_coincident_fraction
+    ]
+
+    is_artifact = spike_events.labels.isin(artifact_labels.index)
+    spike_events = spike_events.loc[~is_artifact]
+
+    grouped = spike_events.groupby("sort_group_id")
+    grouped_spike_times = grouped.spike_times.apply(np.array)
+    grouped_time_bin_ind = grouped.time_bin_ind.apply(np.array)
+
+    # Preserve all original sort group indices so the output aligns 1:1 with the
+    # input. Groups that lost all spikes get empty arrays.
+    filtered_spike_times = [
+        grouped_spike_times[i]
+        if i in grouped_spike_times.index
+        else np.array([], dtype=np.float64)
+        for i in range(n_sort_groups)
+    ]
+    filtered_time_bin_ind = [
+        grouped_time_bin_ind[i]
+        if i in grouped_time_bin_ind.index
+        else np.array([], dtype=np.intp)
+        for i in range(n_sort_groups)
+    ]
+
+    return filtered_spike_times, filtered_time_bin_ind
+
+
 def _read_waveform_features_from_nwb(
     analysis_file_name: str,
     object_id: str,
@@ -338,6 +458,9 @@ def _read_waveform_features_from_nwb(
 def _load_clusterless(
     nwb_file_name: str,
     position_time: NDArray[np.float64],
+    remove_coincident: bool = True,
+    spike_closeness_threshold: float = 0.00004,
+    max_coincident_fraction: float = 0.33,
 ) -> dict[str, dict]:
     """Load clusterless waveform features by brain area.
 
@@ -351,6 +474,16 @@ def _load_clusterless(
         NWB file name.
     position_time : NDArray[np.float64]
         Position timestamps for time-bounding.
+    remove_coincident : bool, optional
+        If True (default), remove cross-probe coincident artifact spikes via
+        :func:`detect_coincident_spikes`, evaluated across ALL probes in the
+        NWB (not per area), since electrical artifacts span the whole probe.
+    spike_closeness_threshold : float, optional
+        Coincidence time window (seconds) passed to
+        :func:`detect_coincident_spikes`. Default 40 us.
+    max_coincident_fraction : float, optional
+        Fraction-of-probes threshold passed to
+        :func:`detect_coincident_spikes`. Default 0.33.
 
     Returns
     -------
@@ -381,9 +514,12 @@ def _load_clusterless(
     rec_rows = rec_sel.fetch("recording_id", "sort_group_id", as_dict=True)
 
     t_start, t_end = float(position_time[0]), float(position_time[-1])
-    result: dict[str, dict] = defaultdict(
-        lambda: {"spike_times": [], "waveform_features": []}
-    )
+
+    # Collect one entry per probe (sort group), tracking its brain area, so
+    # coincident-artifact detection can run across ALL probes before binning.
+    probe_areas: list[str] = []
+    probe_spike_times: list[NDArray[np.float64]] = []
+    probe_features: list[NDArray[np.float64]] = []
 
     for rec_row in rec_rows:
         sort_group_id = int(rec_row["sort_group_id"])
@@ -430,15 +566,46 @@ def _load_clusterless(
                 )
                 continue
 
-            # Filter to position time bounds and add to result
+            # Filter to position time bounds, one probe entry per unit.
             for st, feat in zip(spike_times_list, features_list):
                 mask = (st >= t_start) & (st <= t_end)
-                filtered_st = st[mask]
-                if len(filtered_st) > 0:
-                    result[area_name]["spike_times"].append(filtered_st)
-                    result[area_name]["waveform_features"].append(feat[mask])
+                if mask.any():
+                    probe_areas.append(area_name)
+                    probe_spike_times.append(st[mask])
+                    probe_features.append(feat[mask])
 
-    # Remove areas with no data
+    # Cross-probe coincident artifact removal (over all probes at once).
+    if remove_coincident and len(probe_spike_times) >= 2:
+        n_before = sum(len(st) for st in probe_spike_times)
+        filtered_st, kept_idx = detect_coincident_spikes(
+            probe_spike_times,
+            spike_closeness_threshold=spike_closeness_threshold,
+            max_coincident_fraction=max_coincident_fraction,
+        )
+        if filtered_st:
+            probe_spike_times = filtered_st
+            probe_features = [
+                feat[idx] for idx, feat in zip(kept_idx, probe_features)
+            ]
+            n_after = sum(len(st) for st in probe_spike_times)
+            logger.info(
+                "Coincident-artifact removal: %d/%d spikes dropped (%.2f%%) "
+                "across %d probes",
+                n_before - n_after,
+                n_before,
+                100.0 * (n_before - n_after) / max(n_before, 1),
+                len(probe_spike_times),
+            )
+
+    # Bin probes back to brain areas, dropping any emptied probes.
+    result: dict[str, dict] = defaultdict(
+        lambda: {"spike_times": [], "waveform_features": []}
+    )
+    for area_name, st, feat in zip(probe_areas, probe_spike_times, probe_features):
+        if len(st) > 0:
+            result[area_name]["spike_times"].append(st)
+            result[area_name]["waveform_features"].append(feat)
+
     return {k: v for k, v in result.items() if v["spike_times"]}
 
 
@@ -446,6 +613,9 @@ def load_spikes_by_area(
     nwb_file_name: str,
     position_time: NDArray[np.float64],
     brain_areas: dict[str, dict] | None = None,
+    remove_coincident: bool = True,
+    spike_closeness_threshold: float = 0.00004,
+    max_coincident_fraction: float = 0.33,
 ) -> dict[str, dict]:
     """Load spike data for all brain areas in an NWB file.
 
@@ -465,6 +635,14 @@ def load_spikes_by_area(
         ``{"sorted_spikes_group_name": "..."}``. When provided, only
         the specified SortedSpikesGroups are loaded. When None, all
         available groups are loaded (or built from scratch).
+    remove_coincident : bool, optional
+        If True (default), remove cross-probe coincident artifacts from the
+        clusterless data (see :func:`detect_coincident_spikes`). Sorted spikes
+        are not affected.
+    spike_closeness_threshold : float, optional
+        Coincidence time window (seconds). Default 40 us.
+    max_coincident_fraction : float, optional
+        Fraction-of-probes threshold for the coincidence filter. Default 0.33.
 
     Returns
     -------
@@ -490,7 +668,13 @@ def load_spikes_by_area(
         )
 
     # Load clusterless waveform features
-    clusterless_by_area = _load_clusterless(nwb_file_name, position_time)
+    clusterless_by_area = _load_clusterless(
+        nwb_file_name,
+        position_time,
+        remove_coincident=remove_coincident,
+        spike_closeness_threshold=spike_closeness_threshold,
+        max_coincident_fraction=max_coincident_fraction,
+    )
 
     # Assemble result
     result: dict[str, dict] = {}
