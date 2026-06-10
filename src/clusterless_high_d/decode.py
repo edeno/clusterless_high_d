@@ -1,234 +1,282 @@
-"""Core decoding logic for clusterless high-dimensional analysis."""
+"""Continuous-Fragmented (ContFrag) decoding for clusterless_high_d.
 
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+Wraps ``non_local_detector``'s 2-state ContFrag classifiers (Continuous vs
+Fragmented) for both clusterless and sorted-spike data, in 2D (no track graph)
+or 1D (Spyglass ``TrackGraph``). Mirrors the recipe in
+``continuum_swr_replay.scripts.run_decoding_contfrag``.
+
+Functions
+---------
+run_contfrag_decode
+    Build the environment + classifier and fit/decode for one modality.
+gather_area_spikes
+    Concatenate spike trains (and clusterless features) across matching areas.
+"""
+
+from __future__ import annotations
+
+import logging
 
 import numpy as np
-import yaml
+import pandas as pd
+from numpy.typing import NDArray
 
-from .plotting import plot_posterior, plot_summary
-from .spyglass_io import load_dataset
+logger = logging.getLogger(__name__)
+
+# Encoding-likelihood defaults (from continuum_swr_replay.parameters).
+PLACE_BIN_SIZE_1D: float = 2.0
+PLACE_BIN_SIZE_2D: float = 2.5
+POSITION_STD: float = float(np.sqrt(12.5))  # ~3.54 cm
+WAVEFORM_STD: float = 24.0  # uV
+BLOCK_SIZE: int = 2**10  # 1024
 
 
-def run_decode(
-    dataset_id: str,
-    config_path: Path,
-    plots_config_path: Optional[Path] = None,
-    outdir: Path = Path("results"),
-) -> dict:
-    """Run clusterless decoding for a dataset.
+def gather_area_spikes(
+    spikes: dict[str, dict],
+    area_match: str,
+    modality: str,
+) -> tuple[list[NDArray], list[NDArray] | None]:
+    """Concatenate spike trains across all areas whose name matches.
+
+    Jacob's clusterless is keyed by hemisphere ("Left/Right CA1 Hippocampus")
+    while sorted is under "CA1"; matching on a substring ("CA1") pools them.
 
     Parameters
     ----------
-    dataset_id : str
-        Dataset identifier
-    config_path : Path
-        Path to base configuration YAML
-    plots_config_path : Path, optional
-        Path to plotting configuration YAML
-    outdir : Path
-        Output directory (results will be in outdir/dataset_id/timestamp/)
+    spikes : dict
+        Output of ``load_spikes_by_area``.
+    area_match : str
+        Case-insensitive substring; areas whose name contains it are pooled.
+    modality : str
+        ``"sorted"`` or ``"clusterless"``.
 
     Returns
     -------
-    dict
-        Dictionary with paths to outputs and summary statistics
+    spike_times : list[NDArray]
+        One array per unit/probe across matching areas.
+    waveform_features : list[NDArray] or None
+        Per-unit features for ``"clusterless"``; ``None`` for ``"sorted"``.
     """
-    # Load configuration
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-
-    plots_config = None
-    if plots_config_path and plots_config_path.exists():
-        with open(plots_config_path) as f:
-            plots_config = yaml.safe_load(f)
-
-    # Create timestamped output directory
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    output_dir = outdir / dataset_id / timestamp
-    output_dir.mkdir(parents=True, exist_ok=True)
-    plots_dir = output_dir / "plots"
-    plots_dir.mkdir(exist_ok=True)
-
-    # Save resolved config for provenance
-    config_resolved = {
-        "dataset_id": dataset_id,
-        "timestamp": timestamp,
-        "config": config,
-        "plots_config": plots_config,
-    }
-    with open(output_dir / "config.resolved.yaml", "w") as f:
-        yaml.dump(config_resolved, f, default_flow_style=False)
-
-    # Load dataset from Spyglass
-    print(f"Loading dataset {dataset_id}...")
-    data = load_dataset(dataset_id)
-
-    # Extract data components
-    spike_times = data.get("spike_times")
-    waveform_features = data.get("features")
-    position = data["position"]
-    time = data["time"]
-    metadata = data["metadata"]
-
-    if spike_times is not None:
-        print(
-            f"  Loaded {len(spike_times)} spikes with {waveform_features.shape[1]} features"
+    spike_times: list[NDArray] = []
+    features: list[NDArray] = []
+    for area, area_data in spikes.items():
+        if area_match.lower() not in area.lower() or modality not in area_data:
+            continue
+        spike_times.extend(area_data[modality]["spike_times"])
+        if modality == "clusterless":
+            features.extend(area_data[modality]["waveform_features"])
+    if not spike_times:
+        raise ValueError(
+            f"No {modality} spikes found for areas matching {area_match!r}"
         )
-    else:
-        print(f"  Using placeholder data")
-    print(f"  Position data: {len(time)} time bins")
-    print(
-        f"  Metadata: {metadata['n_contacts']} contacts, region: {metadata.get('region', 'unknown')}"
+    return spike_times, (features if modality == "clusterless" else None)
+
+
+def decoded_map_position(results) -> NDArray[np.float64]:
+    """Maximum-a-posteriori decoded position per time bin.
+
+    Marginalizes the ContFrag posterior over the two states, then defers to
+    ``non_local_detector.analysis.posterior.maximum_a_posteriori_estimate`` for
+    the argmax (handles both 1D and 2D position grids).
+
+    Parameters
+    ----------
+    results : xr.Dataset
+        Output of ``run_contfrag_decode`` (``acausal_posterior`` over a stacked
+        ``state_bins`` index with ``state`` + position coordinates).
+
+    Returns
+    -------
+    NDArray, shape (n_time, n_position_dims)
+        MAP position. 2D -> (n_time, 2); 1D -> (n_time, 1).
+    """
+    from non_local_detector.analysis.posterior import (
+        maximum_a_posteriori_estimate,
     )
 
-    # Check if high-dimensional
-    n_contacts_threshold = config["high_dimensional"]["n_contacts_threshold"]
-    is_high_d = metadata["n_contacts"] >= n_contacts_threshold
-    print(f"  High-dimensional: {is_high_d} (threshold: {n_contacts_threshold})")
+    posterior = results.acausal_posterior.unstack("state_bins").sum("state")
+    return maximum_a_posteriori_estimate(posterior)
 
-    # Run decoding
-    # TODO: Replace placeholder with actual non_local_detector call
-    print("Running decoder...")
-    decoder_type = config.get("decoder", {}).get("type", "placeholder")
 
-    if spike_times is not None and waveform_features is not None:
-        # Have real marks - ready for actual decoder
-        print(f"  Decoder type: {decoder_type}")
-        posterior = _run_decoder_placeholder(
-            spike_times=spike_times,
-            waveform_features=waveform_features,
-            position=position,
-            time=time,
-            config=config,
-            is_high_d=is_high_d,
+def compute_ahead_behind_distance(results, env, position_info):
+    """Signed decode distance via ``get_ahead_behind_distance2D``.
+
+    Magnitude is the geodesic distance from the animal's position to the MAP
+    decoded position along the environment's N-D bin graph (``track_graphDD``),
+    which respects the track interior rather than cutting across gaps; the sign
+    is positive when the decode is ahead of the animal's heading, negative when
+    behind. ``np.abs`` of the result is the decode error (cm).
+
+    Parameters
+    ----------
+    results : xr.Dataset
+        Output of ``run_contfrag_decode``.
+    env : Environment
+        The fitted environment; ``track_graphDD`` + ``edges_`` define the 2D
+        geodesic.
+    position_info : pd.DataFrame
+        Needs ``position_x``, ``position_y``, ``velocity_x``, ``velocity_y``.
+
+    Returns
+    -------
+    NDArray, shape (n_time,)
+        Signed ahead/behind distance (cm).
+    """
+    from non_local_detector.analysis.distance2D import (
+        get_ahead_behind_distance2D,
+    )
+
+    map_xy = decoded_map_position(results)
+    head_position = position_info[["position_x", "position_y"]].to_numpy()
+    # head_direction is a heading ANGLE in radians (the function computes
+    # cos(head_direction - map_direction)); the docstring's "(n_time, 2)" is
+    # misleading. Use the movement heading (orientation is unreliable for these
+    # DLC epochs).
+    head_direction = np.arctan2(
+        position_info["velocity_y"].to_numpy(),
+        position_info["velocity_x"].to_numpy(),
+    )
+    # precomputed_distance=False: the precomputed path in this nld build calls
+    # .items() on an nx.shortest_path generator (broken under networkx >=3),
+    # so we use the per-time-point path instead.
+    return get_ahead_behind_distance2D(
+        head_position,
+        head_direction,
+        map_xy,
+        track_graph=env.track_graphDD,
+        edges=env.edges_,
+        precomputed_distance=False,
+    )
+
+
+def _build_environment(
+    is_1d: bool,
+    track_graph_name: str | None,
+    place_bin_size: float | None = None,
+):
+    """Construct a non_local_detector Environment (2D bin grid or 1D track)."""
+    from non_local_detector.environment import Environment
+
+    if not is_1d:
+        return Environment(
+            place_bin_size=place_bin_size or PLACE_BIN_SIZE_2D
         )
+
+    if track_graph_name is None:
+        raise ValueError("1D decoding requires `track_graph_name`.")
+    from spyglass.linearization.v1 import TrackGraph
+
+    tg = TrackGraph & {"track_graph_name": track_graph_name}
+    if len(tg) == 0:
+        raise ValueError(f"TrackGraph {track_graph_name!r} not found.")
+    row = tg.fetch1()
+    graph = tg.get_networkx_track_graph()
+    edge_spacing = row["linear_edge_spacing"]
+    return Environment(
+        place_bin_size=PLACE_BIN_SIZE_1D,
+        track_graph=graph,
+        edge_order=row["linear_edge_order"],
+        edge_spacing=edge_spacing,
+    )
+
+
+def run_contfrag_decode(
+    position_info: pd.DataFrame,
+    spikes: dict[str, dict],
+    area_match: str,
+    modality: str,
+    is_1d: bool = False,
+    track_graph_name: str | None = None,
+    speed_threshold: float | None = None,
+):
+    """Fit a ContFrag classifier and decode one modality over an epoch.
+
+    Parameters
+    ----------
+    position_info : pd.DataFrame
+        Time-indexed position (needs ``position_x``, ``position_y``, ``speed``).
+    spikes : dict
+        Output of ``load_spikes_by_area``.
+    area_match : str
+        Substring selecting which areas to pool (e.g. ``"CA1"``).
+    modality : str
+        ``"sorted"`` or ``"clusterless"``.
+    is_1d : bool, optional
+        2D bin grid (default) or 1D linearized track.
+    track_graph_name : str or None, optional
+        Spyglass ``TrackGraph`` name, required when ``is_1d``.
+    speed_threshold : float or None, optional
+        If None (default), ALL samples are used to fit the encoding model
+        (place fields estimated from the whole epoch). If a number, only
+        samples with ``speed`` above it (cm/s) are used for encoding.
+
+    Returns
+    -------
+    results : xr.Dataset
+        Posterior + state probabilities over time.
+    detector : ContFrag{Clusterless,SortedSpikes}Classifier
+    env : Environment
+    """
+    from non_local_detector import (
+        ContFragClusterlessClassifier,
+        ContFragSortedSpikesClassifier,
+    )
+
+    env = _build_environment(is_1d, track_graph_name)
+
+    time = position_info.index.to_numpy()
+    position = position_info[["position_x", "position_y"]].to_numpy()
+    if speed_threshold is None:
+        is_training = np.ones(len(time), dtype=bool)
     else:
-        # Fallback to synthetic data for testing
-        print("  Using placeholder decoder with synthetic data")
-        posterior = _run_decoder_placeholder(
-            spike_times=None,
-            waveform_features=None,
-            position=position,
-            time=time,
-            config=config,
-            is_high_d=is_high_d,
-        )
+        is_training = position_info["speed"].to_numpy() > speed_threshold
+    sampling_frequency = float(1.0 / np.median(np.diff(time)))
 
-    # Save outputs
-    print("Saving outputs...")
-    np.savez_compressed(
-        output_dir / "posterior.npz",
+    spike_times, features = gather_area_spikes(spikes, area_match, modality)
+    logger.info(
+        "ContFrag %s decode (%s): %d units, %d time bins, %.1f Hz, "
+        "%d/%d training samples",
+        modality,
+        "1D" if is_1d else "2D",
+        len(spike_times),
+        len(time),
+        sampling_frequency,
+        int(is_training.sum()),
+        len(is_training),
+    )
+
+    common = dict(
+        position_time=time,
+        position=position,
+        spike_times=spike_times,
         time=time,
-        posterior=posterior,
-        position_grid_x=data.get("position_grid_x"),
-        position_grid_y=data.get("position_grid_y"),
-        actual_position=position,
+        is_training=is_training,
     )
 
-    # Generate plots
-    if plots_config:
-        print("Generating plots...")
-        plot_posterior(
-            time=time,
-            posterior=posterior,
-            actual_position=position,
-            config=plots_config,
-            output_path=plots_dir
-            / f"posterior_over_time.{plots_config['general']['format']}",
+    if modality == "clusterless":
+        detector = ContFragClusterlessClassifier(
+            environments=env,
+            clusterless_algorithm_params={
+                "position_std": POSITION_STD,
+                "waveform_std": WAVEFORM_STD,
+                "block_size": BLOCK_SIZE,
+            },
+            sampling_frequency=sampling_frequency,
         )
-
-        plot_summary(
-            time=time,
-            posterior=posterior,
-            actual_position=position,
-            config=plots_config,
-            output_path=plots_dir / f"summary.{plots_config['general']['format']}",
+        results = detector.estimate_parameters(
+            spike_waveform_features=features, **common
         )
+    elif modality == "sorted":
+        detector = ContFragSortedSpikesClassifier(
+            environments=env,
+            sorted_spikes_algorithm_params={
+                "position_std": POSITION_STD,
+                "block_size": BLOCK_SIZE,
+            },
+            sampling_frequency=sampling_frequency,
+        )
+        results = detector.estimate_parameters(**common)
+    else:
+        raise ValueError(f"Unknown modality {modality!r}")
 
-    print(f"✓ Results saved to {output_dir}")
-
-    return {
-        "output_dir": output_dir,
-        "dataset_id": dataset_id,
-        "timestamp": timestamp,
-        "n_time_bins": len(time),
-        "n_contacts": metadata["n_contacts"],
-        "is_high_d": is_high_d,
-    }
-
-
-def _run_decoder_placeholder(
-    spike_times: np.ndarray,
-    waveform_features: np.ndarray,
-    position: np.ndarray,
-    time: np.ndarray,
-    config: dict,
-    is_high_d: bool,
-) -> np.ndarray:
-    """Placeholder decoder - replace with actual non_local_detector call.
-
-    Parameters
-    ----------
-    spike_times : np.ndarray
-        Spike times (n_spikes,) or None for synthetic data
-    waveform_features : np.ndarray
-        Waveform features (n_spikes, n_features) or None for synthetic data
-    position : np.ndarray
-        Actual positions (n_time, 2)
-    time : np.ndarray
-        Time stamps (n_time,)
-    config : dict
-        Configuration dictionary
-    is_high_d : bool
-        Whether this is high-dimensional data
-
-    Returns
-    -------
-    np.ndarray
-        Posterior probability (n_time, n_x_bins, n_y_bins)
-
-    Notes
-    -----
-    TODO: Replace with actual decoder implementation:
-
-    For non_local_detector integration:
-    ```python
-    from non_local_detector import ClusterlessDecoder
-
-    # Initialize decoder
-    decoder = ClusterlessDecoder(
-        position_range=config['decoding']['position_range'],
-        spatial_resolution=config['decoding']['spatial_resolution'],
-        **config['decoder']
-    )
-
-    # Fit on encoding data
-    decoder.fit(spike_times, waveform_features, position)
-
-    # Decode
-    posterior = decoder.predict(spike_times, waveform_features, time)
-    ```
-
-    For GPU-accelerated or custom decoders:
-    - Branch on config['decoder']['type']
-    - Implement different decoder classes
-    - Compare performance/accuracy across implementations
-    """
-    # For now, return a placeholder posterior
-    n_time = len(time)
-    n_x_bins = 50
-    n_y_bins = 50
-
-    if spike_times is not None:
-        print(f"  [PLACEHOLDER] Would decode {len(spike_times)} spikes")
-        print(f"  [PLACEHOLDER] Feature dimensions: {waveform_features.shape}")
-    print("  [PLACEHOLDER] Using dummy decoder - replace with non_local_detector")
-
-    # Create random posterior for demonstration
-    posterior = np.random.rand(n_time, n_x_bins, n_y_bins)
-    # Normalize across space for each time bin
-    posterior = posterior / posterior.sum(axis=(1, 2), keepdims=True)
-
-    return posterior
+    return results, detector, env
