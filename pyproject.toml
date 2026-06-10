@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Lightweight, config-driven clusterless decoding for high-dimensional hippocampal datasets"
 readme = "README.md"
 authors = [{ name = "Eric Denovellis", email = "eric.denovellis@ucsf.edu" }]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -26,6 +26,8 @@ dependencies = [
     "scipy>=1.10.0",
     "spyglass-neuro @ git+https://github.com/LorenFrankLab/spyglass.git",
     "non_local_detector @ git+https://github.com/LorenFrankLab/non_local_detector.git",
+    "kachery_cloud",
+    "jax[cuda12]",                                                                      # required for spyglass
 ]
 
 [project.optional-dependencies]
@@ -38,9 +40,6 @@ dev = [
     "jupyter>=1.0.0",
     "notebook>=7.0.0",
 ]
-
-[project.scripts]
-clusterless-high-d = "clusterless_high_d.cli:main"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
