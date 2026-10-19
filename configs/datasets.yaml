@@ -76,3 +76,28 @@ L14_2024_06_04:
   brain_areas: {}
 
   description: 'L14 right-CA1 recording from 2024-06-04 (DLC run position)'
+
+RS58_2025_12_03:
+  nwb_file_name: "RS5820251203_.nwb"
+  # VIABLE high-dimensional clusterless dataset (found 2026-10-18 by a read-only DB survey;
+  # scripts and CSVs in /cumulus/edeno/lowocc/dbsurvey/). Team: mcoulter section.
+  # 12 CA1 polymer-probe shanks; waveform-feature group "06_r3" covers 11 of them
+  # (sort groups 0-6, 8-11; group 7 missing) with 26-32 amplitude features per shank
+  # (features_param "amplitude_probe", clusterless_thresholder 100 uV, 100 um radius).
+  # Epoch 6 (06_r3, ~20 min): 1.03M spikes after the coincident filter, 19-180 Hz per shank;
+  # sort group 10 median peak ~382 uV (3x the others; check for artifacts).
+  # Loads by feature group, not by load_spikes_by_area; cached (marks, position, track graph)
+  # at /cumulus/edeno/lowocc/rs58/rs58_ep6.npz by /cumulus/edeno/lowocc/rs58/rs58_cache.py.
+  position_source: "DLCPosV1"
+  epoch: 6
+  interval_list_name: "06_r3"
+  pos_merge_id: "07a7e6f0-915d-d343-7e70-69745dc6419b"  # DLC, 30 Hz, no NaN, 46% moving, ~100x100 cm
+  track_graph_name: "rs58_wtrack"  # W-track, 6 nodes / 5 edges, edge spacing 15 cm; linearized for epoch 6 only
+  waveform_features_group_name: "06_r3"
+  brain_areas:
+    CA1:
+      sorted_spikes_group_name: "RS5820251203_.nwb_06_r3_shanks_0-11_ca1_default_exclude"
+      unit_filter_params_name: "ca1_default_exclude"
+  # Held-out position information, 5 blocked folds (flat-referenced, nats/s):
+  # clusterless_kde (ws 24, ps 2.0) 169 +- 18; clusterless_mark_glm 178 +- 17.
+  description: "RS58 W-track 2025-12-03, 12 CA1 polymer shanks, ~31-channel clusterless marks"
