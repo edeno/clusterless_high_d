@@ -96,14 +96,21 @@ than with a recipe.
 
 ### Where code is edited and where it runs
 
-The repo lives on a shared drive reached over ssh, and it has no git remote. Editing files
-through ssh is slow and error-prone for an agent. The suggested arrangement, to be confirmed in
-the first package:
+The repo has a public GitHub remote, created 2026-11-09:
+`https://github.com/edeno/clusterless_high_d` (default branch `master`). Editing files through
+ssh is slow and error-prone for an agent, so code is edited locally and reaches the hosts
+through GitHub.
 
-- A local clone on the orchestrator's machine, with `breeze:/cumulus/edeno/clusterless_high_d`
-  as its remote. Workers edit in local worktrees with ordinary file tools.
-- Workers push their package branch to that remote. Jobs on breeze or zephyr run from a
-  worktree of that branch under `/cumulus/edeno/probe-eval/worktrees/<package>`.
+- The local clone is `/Users/edeno/Documents/GitHub/clusterless_high_d`. Its remote `origin`
+  is GitHub; its remote `cumulus` is `breeze:/cumulus/edeno/clusterless_high_d`. Workers edit
+  in local worktrees with ordinary file tools.
+- Workers push their package branch to `origin`. On breeze or zephyr, fetch from `origin` and
+  run from a worktree of that branch under `/cumulus/edeno/probe-eval/worktrees/<package>`.
+- The hosts can fetch from GitHub over https but cannot push: they hold no GitHub credentials.
+  Anything produced on a host that belongs in git is copied back and committed locally.
+- **The repo is public, so every pushed commit is published.** Commits hold code, configs,
+  documents and small tables. They never hold credentials, database hostnames, data files or
+  result arrays.
 - The existing checkout at `/cumulus/edeno/clusterless_high_d` is never edited in place. It
   holds uncommitted June work, and October's scripts ran from it.
 - Results root: `/cumulus/edeno/probe-eval/results/<package>/`, with a README per folder saying
@@ -162,8 +169,9 @@ yardstick review passes.
   `non_local_detector`.
 - **Model:** Sonnet.
 - **Done when:**
-  - The clone, remote and worktree arrangement above works end to end for a trivial change,
-    or a better arrangement is recorded in `decisions.md` with its reason.
+  - The arrangement above works end to end for a trivial change: edit locally, push to
+    `origin`, fetch on a host, run from a worktree there. A better arrangement, if one is
+    found, is recorded in `decisions.md` with its reason.
   - The repo's environment installs `non_local_detector` at a recorded `main` commit
     (currently `11d9b3de`), replacing the uncommitted pin to `2d730c3a` in `pyproject.toml`.
   - A second way to run against commit `f66c42dc` exists, for the October reproduction.
@@ -451,7 +459,10 @@ the true-model likelihood uses.
 
 ## Open at the start
 
-- Whether the simulator branch should also be pushed to GitHub, or stay as a bundle on
-  `/cumulus`. The plan assumes a bundle.
-- Whether pushing package branches from the orchestrator's machine to the `/cumulus` repo is
-  acceptable as the working arrangement. `workspace-and-environment` confirms it.
+- Whether the simulator branch (`clusterless-curse-of-dimensionality` in the laptop clone of
+  `non_local_detector`) should be pushed to that repo's GitHub remote, or stay as a bundle on
+  `/cumulus`. The plan assumes a bundle. Once `simulator-transfer` has copied the simulator
+  into this repo, it is on GitHub here either way.
+- The June research notes under `.claude/research/` in the `/cumulus` checkout are untracked
+  and are not on GitHub. `claims-ledger` reads them there. Whether they are committed, now that
+  the repo is public, is the owner's call.
