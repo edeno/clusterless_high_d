@@ -122,8 +122,10 @@ through GitHub.
 
 Ask before any of these. Approval for one does not carry to the next.
 
-- Pushing anything to GitHub, including the simulator branch.
-- Merging into `master` here or `main` in `non_local_detector`.
+- Pushing anything to `non_local_detector` on GitHub, including the simulator branch.
+- Merging into `master` here or `main` in `non_local_detector`. Package branches of this repo
+  may be pushed to `edeno/clusterless_high_d` without asking each time
+  **(owner, 2026-11-09)**.
 - Any change to `non_local_detector`. Steps 0–2 are meant to need none; if a package finds it
   cannot proceed without one, stop and ask.
 - Changing a target or tolerance that the design fixed.
@@ -447,6 +449,9 @@ Starts after the yardstick review. Depends on waves 1 and 2.
   count at which each model works under the design's targets, the boundary and well findings,
   every disagreement between primary and supporting scores, and what remains untested.
 - **Fixed:** targets are applied as written in the design. A miss is reported as a miss.
+- **Fixed:** "works" against sorted units is decided with all curated sorted spikes. The table
+  shows that column and the trimmed-sorted diagnostic side by side, labelled, so a reader
+  cannot take one for the other.
 - **This is a stopping point.** The owner reads the verdict before anything further.
 
 ## After the verdict
