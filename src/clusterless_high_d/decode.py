@@ -188,6 +188,11 @@ def run_contfrag_decode(
     is_1d: bool = False,
     track_graph_name: str | None = None,
     speed_threshold: float | None = None,
+    is_training: NDArray[np.bool_] | None = None,
+    position_std: float = POSITION_STD,
+    waveform_std: float = WAVEFORM_STD,
+    mark_transform: str = "raw",
+    mark_n_components: int | None = None,
 ):
     """Fit a ContFrag classifier and decode one modality over an epoch.
 
@@ -206,9 +211,23 @@ def run_contfrag_decode(
     track_graph_name : str or None, optional
         Spyglass ``TrackGraph`` name, required when ``is_1d``.
     speed_threshold : float or None, optional
-        If None (default), ALL samples are used to fit the encoding model
-        (place fields estimated from the whole epoch). If a number, only
-        samples with ``speed`` above it (cm/s) are used for encoding.
+        Used only when ``is_training`` is None. If None (default), ALL samples
+        train the encoding model; if a number, only samples faster than it (cm/s).
+    is_training : NDArray[bool] or None, optional
+        Explicit per-sample mask selecting which samples fit the encoding model.
+        Overrides ``speed_threshold`` when given — used by the CV harness to fit on
+        a training fold and score the held-out fold. All time bins are still decoded.
+    position_std : float, optional
+        Position-kernel bandwidth (cm) for the encoding model. Exposed for bandwidth CV.
+    waveform_std : float, optional
+        Waveform/mark-kernel bandwidth for clusterless. Exposed for bandwidth CV. NOTE: the
+        right value depends on ``mark_transform`` — raw amplitude marks want ~24 (uV), but
+        z-scored/whitened marks are unit-variance and want ~0.5-2.
+    mark_transform : {"raw", "zscore", "whiten", "pca"}, optional
+        Per-probe transform applied to clusterless marks before decoding (see
+        :func:`clusterless_high_d.marks.transform_marks`). Default "raw".
+    mark_n_components : int or None, optional
+        PCA components to keep when ``mark_transform="pca"``.
 
     Returns
     -------
@@ -226,16 +245,26 @@ def run_contfrag_decode(
 
     time = position_info.index.to_numpy()
     position = position_info[["position_x", "position_y"]].to_numpy()
-    if speed_threshold is None:
+    if is_training is not None:
+        is_training = np.asarray(is_training, dtype=bool)
+        if len(is_training) != len(time):
+            raise ValueError("is_training length must match the number of time bins")
+    elif speed_threshold is None:
         is_training = np.ones(len(time), dtype=bool)
     else:
         is_training = position_info["speed"].to_numpy() > speed_threshold
     sampling_frequency = float(1.0 / np.median(np.diff(time)))
 
     spike_times, features = gather_area_spikes(spikes, area_match, modality)
+    if modality == "clusterless" and mark_transform != "raw":
+        from .marks import transform_marks
+
+        features = transform_marks(
+            features, kind=mark_transform, n_components=mark_n_components
+        )
     logger.info(
         "ContFrag %s decode (%s): %d units, %d time bins, %.1f Hz, "
-        "%d/%d training samples",
+        "%d/%d training samples (pos_std=%.2f, wf_std=%.2f)",
         modality,
         "1D" if is_1d else "2D",
         len(spike_times),
@@ -243,22 +272,24 @@ def run_contfrag_decode(
         sampling_frequency,
         int(is_training.sum()),
         len(is_training),
+        position_std,
+        waveform_std,
     )
 
-    common = dict(
-        position_time=time,
-        position=position,
-        spike_times=spike_times,
-        time=time,
-        is_training=is_training,
-    )
+    common = {
+        "position_time": time,
+        "position": position,
+        "spike_times": spike_times,
+        "time": time,
+        "is_training": is_training,
+    }
 
     if modality == "clusterless":
         detector = ContFragClusterlessClassifier(
             environments=env,
             clusterless_algorithm_params={
-                "position_std": POSITION_STD,
-                "waveform_std": WAVEFORM_STD,
+                "position_std": position_std,
+                "waveform_std": waveform_std,
                 "block_size": BLOCK_SIZE,
             },
             sampling_frequency=sampling_frequency,
@@ -270,7 +301,7 @@ def run_contfrag_decode(
         detector = ContFragSortedSpikesClassifier(
             environments=env,
             sorted_spikes_algorithm_params={
-                "position_std": POSITION_STD,
+                "position_std": position_std,
                 "block_size": BLOCK_SIZE,
             },
             sampling_frequency=sampling_frequency,
