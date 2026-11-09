@@ -120,12 +120,18 @@ models is better, the disagreement is reported and investigated.
 `sorted_spikes_glm` on curated units from the same shanks, same time bins, same folds, each
 against its own flat refit. This applies only to shanks with many hippocampal contacts.
 
+The deciding comparison is against sorted units with **all** curated spikes
+**(user, 2026-11-09)**. For that comparison the clusterless model uses its best detection
+threshold, chosen inside training data like any other tuning parameter (see Detection
+threshold). This is the end-to-end claim: clusterless decoding against ordinary sorted
+decoding.
+
 An October note says the 100 µV clusterless threshold on RS58 misses 8–76% of curated sorted
-spikes, depending on the shank. That figure is unverified. To keep spike detection from being
-mistaken for a likelihood failure, sorted units are scored two ways **(my call)**: with all
-curated spikes, and with only the spikes the clusterless threshold also caught. The gap between
-those two is the detection loss. The gap from the second to the clusterless model is the
-likelihood loss. Lowering the threshold is in scope (see Detection threshold).
+spikes, depending on the shank. That figure is unverified. So sorted units are also scored
+with only the spikes the clusterless threshold caught. This second comparison is a diagnostic
+and never decides "works". When a clusterless model misses the bar, it says why: the gap
+between the two sorted scores is the detection loss, and the gap from the trimmed sorted score
+to the clusterless model is the likelihood loss.
 
 **Absolute bar in simulation (user: simulation builds trust; the form is my call).** The
 fraction of the true model's information that a fitted model recovers, where the true model is
@@ -232,8 +238,9 @@ Done when:
 - On real shanks it beats its flat refit on every fold.
 - On real shanks with at least 10 contacts in the estimated hippocampal span it captures at
   least as much information as sorted units on the same shanks **(user)**. The comparison that
-  decides this uses the sorted spikes the clusterless threshold also caught; the all-spikes
-  comparison is reported beside it.
+  decides this uses all curated sorted spikes, with the clusterless model at its best
+  detection threshold **(user, 2026-11-09)**. The comparison against only the sorted spikes
+  the threshold caught is reported beside it as a diagnostic.
 
 ### Step 3. Look for better
 
